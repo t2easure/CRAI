@@ -1,4 +1,5 @@
 .env
+.claude/
 __pycache__/
 *.py[cod]
 .venv/
@@ -9,4 +10,4 @@ dist/
 logs/*.log
 .streamlit/
 debug_output.txt
-data/
+data/last_run.json
