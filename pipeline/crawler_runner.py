@@ -1,5 +1,9 @@
+import sys
 import traceback
 import asyncio
+
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
 from concurrent.futures import ThreadPoolExecutor
 from crawlers import reddit_crawler, bilibili_crawler, inven_crawler
 from utils.config import update_last_run
@@ -50,7 +54,7 @@ async def run_all():
         if result["status"] == "success":
             print(f"  {name}: {result['count']}건 수집")
         else:
-            print(f"  {name}: 실패 — {result['error']}")
+            print(f"  {name}: 실패 - {result['error']}")
     print(f"{'='*40}")
 
     return results
