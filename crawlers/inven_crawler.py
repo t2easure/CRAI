@@ -26,7 +26,10 @@ def is_recent(item: dict, since: datetime) -> bool:
         if ":" in date_str and "-" not in date_str:
             post_dt = datetime.strptime(f"{today} {date_str}", "%Y-%m-%d %H:%M")
         elif len(date_str) == 5:
-            post_dt = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d")
+            # MM-DD 형식 — 올해 날짜가 오늘보다 미래면 작년으로 처리
+            candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
+            year = today.year if candidate <= today else today.year - 1
+            post_dt = datetime.strptime(f"{year}-{date_str}", "%Y-%m-%d")
         else:
             post_dt = datetime.strptime(date_str, "%Y-%m-%d")
         post_dt = post_dt.replace(tzinfo=timezone.utc)
