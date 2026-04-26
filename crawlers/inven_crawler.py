@@ -6,7 +6,15 @@ from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 from utils.config import DATA_DIR, get_last_run
 
-BASE_URL = "https://www.inven.co.kr/board/lineageclassic/6482"
+BOARDS = [
+    {"game": "lineage_classic", "url": "https://www.inven.co.kr/board/lineageclassic/6482"},
+    {"game": "lineage_remaster", "url": "https://www.inven.co.kr/board/lineage/339"},
+    {"game": "lineage2", "url": "https://www.inven.co.kr/board/lineage2/381"},
+    {"game": "lineage_m", "url": "https://www.inven.co.kr/board/lineagem/5019"},
+    {"game": "lineage2m", "url": "https://www.inven.co.kr/board/lineage2m/5522"},
+    {"game": "lineage_w", "url": "https://www.inven.co.kr/board/lineagew/5831"},
+]
+
 MAX_PAGES = 5
 
 def is_recent(item: dict, since: datetime) -> bool:
@@ -16,7 +24,6 @@ def is_recent(item: dict, since: datetime) -> bool:
     today = date.today()
     try:
         if ":" in date_str and "-" not in date_str:
-            # HH:MM 형식 → 오늘 날짜로 datetime 생성
             post_dt = datetime.strptime(f"{today} {date_str}", "%Y-%m-%d %H:%M")
         elif len(date_str) == 5:
             post_dt = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d")
@@ -47,50 +54,70 @@ config = CrawlerRunConfig(
     cache_mode=CacheMode.BYPASS,
 )
 
+async def crawl_board(crawler, board: dict, since: datetime) -> list:
+    game = board["game"]
+    base_url = board["url"]
+    all_items = []
+
+    for page in range(1, MAX_PAGES + 1):
+        url = f"{base_url}?p={page}"
+        print(f"[Inven/{game}] page {page}...")
+
+        result = await crawler.arun(url=url, config=config)
+
+        if not result.success:
+            print(f"  -> failed: {result.error_message}")
+            break
+
+        items = json.loads(result.extracted_content) if result.extracted_content else []
+        if not items:
+            print(f"  -> no data, stop")
+            break
+
+        for item in items:
+            if item.get("url") and not item["url"].startswith("http"):
+                item["url"] = "https://www.inven.co.kr" + item["url"]
+            item["game"] = game
+            item["source"] = "inven"
+
+        recent = [i for i in items if is_recent(i, since)]
+        print(f"  -> {len(items)} total / {len(recent)} recent")
+
+        if len(recent) < len(items):
+            all_items.extend(recent)
+            break
+        all_items.extend(recent)
+
+        await asyncio.sleep(1.5)
+
+    return all_items
+
+
 async def crawl():
     all_items = []
     since = get_last_run()
 
     async with AsyncWebCrawler(verbose=False) as crawler:
-        for page in range(1, MAX_PAGES + 1):
-            url = f"{BASE_URL}?p={page}"
-            print(f"[인벤] 페이지 {page} 크롤링 중...")
+        for board in BOARDS:
+            items = await crawl_board(crawler, board, since)
+            all_items.extend(items)
+            print(f"[Inven/{board['game']}] {len(items)} items collected")
 
-            result = await crawler.arun(url=url, config=config)
-
-            if not result.success:
-                print(f"  → 페이지 {page} 실패: {result.error_message}")
-                break
-
-            items = json.loads(result.extracted_content) if result.extracted_content else []
-            if not items:
-                print(f"  → 페이지 {page} 데이터 없음, 중단")
-                break
-
-            for item in items:
-                if item.get("url") and not item["url"].startswith("http"):
-                    item["url"] = "https://www.inven.co.kr" + item["url"]
-
-            recent = [i for i in items if is_recent(i, since)]
-            print(f"  → {len(items)}건 수집 / {len(recent)}건 ({since.strftime('%Y-%m-%d %H:%M')} 이후)")
-            if len(recent) < len(items):
-                all_items.extend(recent)
-                break
-            all_items.extend(recent)
-
-            await asyncio.sleep(1.5)
-
-    print(f"[인벤] 전체 수집 완료: {len(all_items)}건")
-
-    output_dir = os.path.join(DATA_DIR, "inven")
-    os.makedirs(output_dir, exist_ok=True)
+    print(f"[Inven] total: {len(all_items)} items")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    output_path = os.path.join(output_dir, f"{timestamp}.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(all_items, f, ensure_ascii=False, indent=2)
+    by_game: dict = {}
+    for item in all_items:
+        by_game.setdefault(item["game"], []).append(item)
 
-    print(f"[인벤] 저장 완료: {output_path}")
+    for game, items in by_game.items():
+        output_dir = os.path.join(DATA_DIR, "inven", game)
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{timestamp}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        print(f"[Inven/{game}] saved {len(items)} items -> {output_path}")
+
     return all_items
 
 

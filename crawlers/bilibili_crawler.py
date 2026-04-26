@@ -1,8 +1,24 @@
 import json
 import os
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from apify_client import ApifyClient
 from utils.config import APIFY_API_TOKEN, DATA_DIR, get_last_run
+
+ACTOR_ID = "zhorex/bilibili-scraper"
+
+# 게임별 키워드 (중국 서비스명 기준)
+GAME_KEYWORDS = {
+    "lineage_remaster": ["天堂重制版 外挂", "天堂重制版 更新", "天堂重制版 游戏"],
+    "lineage2": ["天堂2 外挂", "天堂2 hack", "天堂2 bot", "天堂2 更新", "lineage2 hack"],
+    "lineage_classic": ["天堂经典 外挂", "天堂经典 脚本", "天堂经典 更新", "lineage classic hack"],
+    "lineage_m": [
+        "天堂M 外挂", "天堂M hack", "天堂M cheat", "天堂M bot",
+        "天堂M 脚本", "天堂M 辅助", "天堂M 更新", "天堂M 私服",
+        "lineage m hack", "lineage m bot", "lineage m update",
+    ],
+    "lineage2m": ["天堂2M 外挂", "天堂2M 更新", "天堂2M 游戏", "lineage 2m hack"],
+    "lineage_w": ["天堂W 外挂", "天堂W 更新", "lineage w hack"],
+}
 
 def is_recent(item: dict, since: datetime) -> bool:
     publish_date = item.get("publishDate", "")
@@ -13,67 +29,45 @@ def is_recent(item: dict, since: datetime) -> bool:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt >= since
 
-ACTOR_ID = "zhorex/bilibili-scraper"
-
-KEYWORDS = [
-    # 핵 / 치트 / 봇
-    "天堂经典 外挂",
-    "天堂经典 hack",
-    "天堂经典 cheat",
-    "天堂经典 bot",
-    "天堂经典 刷怪",       # 몹 파밍 자동화
-    "天堂经典 自动打怪",   # 자동사냥
-    "天堂经典 脚本",       # 스크립트/매크로
-    "天堂经典 辅助",       # 보조 프로그램
-    # 업데이트 / 패치 / 서버
-    "天堂经典 更新",       # 업데이트
-    "天堂经典 patch",
-    "天堂经典 新服",       # 신규 서버
-    "天堂经典 开服",       # 서버 오픈
-    "天堂经典 私服",       # 프라이빗 서버
-    # 일반 커뮤니티 여론
-    "天堂经典 攻略",       # 공략
-    "天堂经典 评测",       # 리뷰/평가
-    "天堂经典 游戏",       # 일반 게임플레이
-    # 영문 키워드
-    "lineage classic hack",
-    "lineage classic bot",
-    "lineage classic update",
-    "lineage classic private server",
-]
-
 def run():
     client = ApifyClient(APIFY_API_TOKEN)
     since = get_last_run()
-
     all_items = []
 
-    for keyword in KEYWORDS:
-        print(f"[Bilibili] 검색 중: '{keyword}'")
+    for game, keywords in GAME_KEYWORDS.items():
+        for keyword in keywords:
+            run_input = {
+                "mode": "search",
+                "searchQuery": keyword,
+                "maxResults": 10,
+            }
 
-        run_input = {
-            "mode": "search",
-            "searchQuery": keyword,
-            "maxResults": 10,
-        }
+            run = client.actor(ACTOR_ID).call(run_input=run_input)
+            items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+            recent = [i for i in items if is_recent(i, since)]
 
-        run = client.actor(ACTOR_ID).call(run_input=run_input)
-        items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-        recent = [i for i in items if is_recent(i, since)]
-        print(f"  → {len(items)}건 수집 / {len(recent)}건 ({since.strftime('%Y-%m-%d %H:%M')} 이후)")
-        all_items.extend(recent)
+            for item in recent:
+                item["game"] = game
+                item["keyword"] = keyword
+                item["source"] = "bilibili"
 
-    print(f"[Bilibili] 전체 수집 완료: {len(all_items)}건")
+            all_items.extend(recent)
 
-    output_dir = os.path.join(DATA_DIR, "bilibili")
-    os.makedirs(output_dir, exist_ok=True)
+    print(f"[Bilibili] total: {len(all_items)} items ({since.strftime('%Y-%m-%d %H:%M')} since)")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    output_path = os.path.join(output_dir, f"{timestamp}.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(all_items, f, ensure_ascii=False, indent=2)
+    by_game: dict = {}
+    for item in all_items:
+        by_game.setdefault(item["game"], []).append(item)
 
-    print(f"[Bilibili] 저장 완료: {output_path}")
+    for game, items in by_game.items():
+        output_dir = os.path.join(DATA_DIR, "bilibili", game)
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{timestamp}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        print(f"[Bilibili/{game}] saved {len(items)} items -> {output_path}")
+
     return all_items
 
 

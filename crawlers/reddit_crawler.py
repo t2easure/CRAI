@@ -1,10 +1,27 @@
 import json
 import os
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from apify_client import ApifyClient
 from utils.config import APIFY_API_TOKEN, DATA_DIR, get_last_run
 
 ACTOR_ID = "trudax/reddit-scraper-lite"
+
+SUBREDDITS = [
+    {"url": "https://www.reddit.com/r/Lineage/", "game": "lineage_remaster"},
+    {"url": "https://www.reddit.com/r/lineage2/", "game": "lineage2"},
+    {"url": "https://www.reddit.com/r/LineageM/", "game": "lineage_m"},
+    {"url": "https://www.reddit.com/r/LineageW/", "game": "lineage_w"},
+]
+
+LINEAGEOS_KEYWORDS = ["lineageos", "lineage os", "android", "rom", "aosp", "pixel", "samsung rom"]
+
+def is_lineageos(item: dict) -> bool:
+    text = " ".join([
+        item.get("title", ""),
+        item.get("body", ""),
+        item.get("communityName", ""),
+    ]).lower()
+    return any(kw in text for kw in LINEAGEOS_KEYWORDS)
 
 def is_recent(item: dict, since: datetime) -> bool:
     created_at = item.get("createdAt", "")
@@ -13,39 +30,55 @@ def is_recent(item: dict, since: datetime) -> bool:
     dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
     return dt >= since
 
-SUBREDDITS = [
-    "https://www.reddit.com/r/Lineage/",
-    "https://www.reddit.com/r/MMORPG/",
-]
-
 def run():
     client = ApifyClient(APIFY_API_TOKEN)
-
-    run_input = {
-        "startUrls": [{"url": url} for url in SUBREDDITS],
-        "maxPostCount": 50,
-        "maxComments": 20,
-        "proxy": {"useApifyProxy": True},
-    }
-
-    print("[Reddit] actor 실행 중...")
-    run = client.actor(ACTOR_ID).call(run_input=run_input)
-
     since = get_last_run()
-    items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-    items = [i for i in items if i.get("dataType") != "community" and is_recent(i, since)]
-    print(f"[Reddit] 수집 완료: {len(items)}건 ({since.strftime('%Y-%m-%d %H:%M')} 이후)")
+    all_items = []
 
-    output_dir = os.path.join(DATA_DIR, "reddit")
-    os.makedirs(output_dir, exist_ok=True)
+    for subreddit in SUBREDDITS:
+        game = subreddit["game"]
+        print(f"[Reddit] crawling r/{subreddit['url'].split('/r/')[1].strip('/')} ...")
+
+        run_input = {
+            "startUrls": [{"url": subreddit["url"]}],
+            "maxPostCount": 50,
+            "maxComments": 20,
+            "proxy": {"useApifyProxy": True},
+        }
+
+        run = client.actor(ACTOR_ID).call(run_input=run_input)
+        items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+
+        items = [
+            i for i in items
+            if i.get("dataType") != "community"
+            and is_recent(i, since)
+            and not is_lineageos(i)
+        ]
+
+        for item in items:
+            item["game"] = game
+            item["source"] = "reddit"
+
+        print(f"  -> {len(items)} items")
+        all_items.extend(items)
+
+    print(f"[Reddit] total: {len(all_items)} items ({since.strftime('%Y-%m-%d %H:%M')} since)")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    output_path = os.path.join(output_dir, f"{timestamp}.json")
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    by_game: dict = {}
+    for item in all_items:
+        by_game.setdefault(item["game"], []).append(item)
 
-    print(f"[Reddit] 저장 완료: {output_path}")
-    return items
+    for game, items in by_game.items():
+        output_dir = os.path.join(DATA_DIR, "reddit", game)
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{timestamp}.json")
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        print(f"[Reddit/{game}] saved {len(items)} items -> {output_path}")
+
+    return all_items
 
 
 if __name__ == "__main__":
