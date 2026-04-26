@@ -10,4 +10,4 @@ dist/
 logs/*.log
 .streamlit/
 debug_output.txt
-data/
+data/last_run.json
