@@ -77,11 +77,20 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
             print(f"  -> no data, stop")
             break
 
+        today = date.today()
         for item in items:
             if item.get("url") and not item["url"].startswith("http"):
                 item["url"] = "https://www.inven.co.kr" + item["url"]
             item["game"] = game
             item["source"] = "inven"
+            date_str = item.get("date", "").strip()
+            if date_str:
+                if ":" in date_str and "-" not in date_str:
+                    item["date"] = f"{today} {date_str}"
+                elif len(date_str) == 5:
+                    candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
+                    year = today.year if candidate <= today else today.year - 1
+                    item["date"] = f"{year}-{date_str}"
 
         recent = [i for i in items if is_recent(i, since)]
         print(f"  -> {len(items)} total / {len(recent)} recent")

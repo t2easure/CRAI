@@ -144,10 +144,14 @@ def get_stats() -> dict:
             cur.execute("SELECT COUNT(*) AS cnt FROM posts")
             total_row = cur.fetchone()
 
+        cur.execute("SELECT run_at FROM crawl_logs WHERE status = 'success' ORDER BY run_at DESC LIMIT 1")
+        last_run_row = cur.fetchone()
+
     return {
         "by_game": {row["game"]: row["cnt"] for row in by_game_rows if row["game"]},
         "by_source": {row["source"]: row["cnt"] for row in by_source_rows if row["source"]},
         "total": total_row["cnt"] if total_row else 0,
+        "last_run": last_run_row["run_at"] if last_run_row else None,
     }
 
 

@@ -82,7 +82,10 @@ export default function PostsTable({
                 {post.author}
               </td>
               <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
-                {post.date ? new Date(post.date).toLocaleDateString('ko-KR') : post.date}
+                {post.date ? (() => {
+                  const d = new Date(post.date.replace(' ', 'T'))
+                  return isNaN(d.getTime()) ? post.date : d.toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                })() : '-'}
               </td>
             </tr>
           ))}

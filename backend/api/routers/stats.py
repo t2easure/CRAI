@@ -12,6 +12,7 @@ def stats():
         "total": data["total"],
         "byGame": data["by_game"],
         "bySource": data["by_source"],
+        "lastRun": data["last_run"],
     }
 
 
