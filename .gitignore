@@ -11,3 +11,4 @@ logs/*.log
 .streamlit/
 debug_output.txt
 data/last_run.json
+ku-hys-01-key.pem
