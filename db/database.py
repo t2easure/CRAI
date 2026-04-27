@@ -1,58 +1,58 @@
 import json
 import os
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import psycopg2
+import psycopg2.extras
+
 from db.preprocess import preprocess
-from utils.config import DATA_DIR
+from utils.config import DATA_DIR, DATABASE_URL
 
 
-DB_PATH = os.path.abspath(os.path.join(DATA_DIR, "crai.db"))
-
-
-def _get_connection() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+def _get_connection():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL 환경변수가 설정되지 않았습니다.")
+    conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 
 def init_db() -> None:
     """DB 및 테이블 초기화. 없으면 생성."""
     with _get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS posts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT UNIQUE,
-                title TEXT,
-                content TEXT,
-                author TEXT,
-                date TEXT,
-                game TEXT,
-                source TEXT,
-                keyword TEXT,
-                views TEXT,
-                recommend TEXT,
-                raw TEXT,
-                created_at TEXT
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS posts (
+                    id SERIAL PRIMARY KEY,
+                    url TEXT UNIQUE,
+                    title TEXT,
+                    content TEXT,
+                    author TEXT,
+                    date TEXT,
+                    game TEXT,
+                    source TEXT,
+                    keyword TEXT,
+                    views TEXT,
+                    recommend TEXT,
+                    raw TEXT,
+                    created_at TEXT
+                )
+                """
             )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS crawl_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_at TEXT,
-                source TEXT,
-                game TEXT,
-                status TEXT,
-                count INTEGER,
-                error_msg TEXT
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS crawl_logs (
+                    id SERIAL PRIMARY KEY,
+                    run_at TEXT,
+                    source TEXT,
+                    game TEXT,
+                    status TEXT,
+                    count INTEGER,
+                    error_msg TEXT
+                )
+                """
             )
-            """
-        )
         conn.commit()
 
 
@@ -69,39 +69,34 @@ def save_posts(items: list[dict]) -> int:
     inserted = 0
 
     with _get_connection() as conn:
-        cur = conn.cursor()
-        for item in items:
-            row = {
-                "url": item.get("url"),
-                "title": item.get("title"),
-                "content": item.get("content") or item.get("body") or item.get("description"),
-                "author": item.get("author") or item.get("username"),
-                "date": item.get("date") or item.get("publishDate") or item.get("createdAt"),
-                "game": item.get("game"),
-                "source": item.get("source"),
-                "keyword": item.get("keyword"),
-                "views": item.get("views") or item.get("view"),
-                "recommend": item.get("recommend") or item.get("upvotes"),
-                "raw": json.dumps(item, ensure_ascii=False),
-                "created_at": now_utc,
-            }
-
-            cur.execute(
-                """
-                INSERT OR IGNORE INTO posts (
-                    url, title, content, author, date, game, source,
-                    keyword, views, recommend, raw, created_at
+        with conn.cursor() as cur:
+            for item in items:
+                cur.execute(
+                    """
+                    INSERT INTO posts (
+                        url, title, content, author, date, game, source,
+                        keyword, views, recommend, raw, created_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (url) DO NOTHING
+                    """,
+                    (
+                        item.get("url"),
+                        item.get("title"),
+                        item.get("content") or item.get("body") or item.get("description"),
+                        item.get("author") or item.get("username"),
+                        item.get("date") or item.get("publishDate") or item.get("createdAt"),
+                        item.get("game"),
+                        item.get("source"),
+                        item.get("keyword"),
+                        item.get("views") or item.get("view"),
+                        item.get("recommend") or item.get("upvotes"),
+                        json.dumps(item, ensure_ascii=False),
+                        now_utc,
+                    ),
                 )
-                VALUES (
-                    :url, :title, :content, :author, :date, :game, :source,
-                    :keyword, :views, :recommend, :raw, :created_at
-                )
-                """,
-                row,
-            )
-            if cur.rowcount > 0:
-                inserted += 1
-
+                if cur.rowcount > 0:
+                    inserted += 1
         conn.commit()
 
     return inserted
@@ -115,38 +110,39 @@ def get_posts(game: str = None, source: str = None, since: str = None) -> list[d
     - since: ISO format 날짜 문자열, created_at >= since 조건 (None이면 전체)
     반환: list of dict (컬럼명 → 값)
     """
-    query = "SELECT * FROM posts WHERE 1=1"
+    query = "SELECT * FROM posts WHERE TRUE"
     params: list[Any] = []
 
     if game:
-        query += " AND game = ?"
+        query += " AND game = %s"
         params.append(game)
     if source:
-        query += " AND source = ?"
+        query += " AND source = %s"
         params.append(source)
     if since:
-        query += " AND created_at >= ?"
+        query += " AND created_at >= %s"
         params.append(since)
 
     query += " ORDER BY created_at DESC"
 
     with _get_connection() as conn:
-        rows = conn.execute(query, params).fetchall()
-        return [dict(row) for row in rows]
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(query, params)
+            return [dict(row) for row in cur.fetchall()]
 
 
 def get_stats() -> dict:
-    """
-    게임별/소스별 수집 건수 반환.
-    """
+    """게임별/소스별 수집 건수 반환."""
     with _get_connection() as conn:
-        by_game_rows = conn.execute(
-            "SELECT game, COUNT(*) AS cnt FROM posts GROUP BY game"
-        ).fetchall()
-        by_source_rows = conn.execute(
-            "SELECT source, COUNT(*) AS cnt FROM posts GROUP BY source"
-        ).fetchall()
-        total_row = conn.execute("SELECT COUNT(*) AS cnt FROM posts").fetchone()
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT game, COUNT(*) AS cnt FROM posts GROUP BY game")
+            by_game_rows = cur.fetchall()
+
+            cur.execute("SELECT source, COUNT(*) AS cnt FROM posts GROUP BY source")
+            by_source_rows = cur.fetchall()
+
+            cur.execute("SELECT COUNT(*) AS cnt FROM posts")
+            total_row = cur.fetchone()
 
     return {
         "by_game": {row["game"]: row["cnt"] for row in by_game_rows if row["game"]},
@@ -156,17 +152,16 @@ def get_stats() -> dict:
 
 
 def delete_expired_posts(days: int = 30) -> int:
-    """
-    created_at 기준 days일 이상 지난 posts 삭제.
-    삭제된 건수 반환.
-    """
+    """created_at 기준 days일 이상 지난 posts 삭제. 삭제된 건수 반환."""
     threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
     with _get_connection() as conn:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM posts WHERE created_at < ?", (threshold,))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM posts WHERE created_at < %s", (threshold,))
+            deleted = cur.rowcount
         conn.commit()
-        return cur.rowcount
+
+    return deleted
 
 
 def delete_expired_json_files(days: int = 30) -> int:
@@ -198,7 +193,7 @@ def delete_expired_json_files(days: int = 30) -> int:
                 except ValueError:
                     continue
 
-                if file_date <= threshold_date:
+                if file_date < threshold_date:
                     os.remove(os.path.join(game_dir, filename))
                     removed += 1
 
@@ -215,26 +210,28 @@ def log_crawl(
     """크롤링 실행 결과를 crawl_logs 테이블에 기록."""
     run_at = datetime.now(timezone.utc).isoformat()
     with _get_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO crawl_logs (run_at, source, game, status, count, error_msg)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (run_at, source, game, status, count, error_msg),
-        )
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO crawl_logs (run_at, source, game, status, count, error_msg)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (run_at, source, game, status, count, error_msg),
+            )
         conn.commit()
 
 
 def get_crawl_logs(limit: int = 50) -> list[dict]:
     """최근 crawl_logs 조회. 최신순 정렬."""
     with _get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, run_at, source, game, status, count, error_msg
-            FROM crawl_logs
-            ORDER BY run_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-        return [dict(row) for row in rows]
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, run_at, source, game, status, count, error_msg
+                FROM crawl_logs
+                ORDER BY run_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return [dict(row) for row in cur.fetchall()]
