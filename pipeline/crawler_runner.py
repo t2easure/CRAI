@@ -32,7 +32,7 @@ async def run_all():
     print("[Pipeline] 전체 크롤러 병렬 실행 시작\n")
 
     # Reddit, Bilibili는 동기 함수라 ThreadPoolExecutor로 병렬 실행
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     with ThreadPoolExecutor(max_workers=len(crawlers_sync)) as executor:
         tasks = [
             loop.run_in_executor(executor, _run_safe, name, source, run_fn)
