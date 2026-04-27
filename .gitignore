@@ -13,6 +13,6 @@ debug_output.txt
 data/last_run.json
 ku-hys-01-key.pem
 *.pem
-dashboard/.next/
-dashboard/node_modules/
-dashboard/dashboard/
+frontend/.next/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
