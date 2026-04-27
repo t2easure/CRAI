@@ -123,7 +123,7 @@ def get_posts(game: str = None, source: str = None, since: str = None) -> list[d
         query += " AND created_at >= %s"
         params.append(since)
 
-    query += " ORDER BY created_at DESC"
+    query += " ORDER BY date DESC NULLS LAST"
 
     with _get_connection() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -144,8 +144,8 @@ def get_stats() -> dict:
             cur.execute("SELECT COUNT(*) AS cnt FROM posts")
             total_row = cur.fetchone()
 
-        cur.execute("SELECT run_at FROM crawl_logs WHERE status = 'success' ORDER BY run_at DESC LIMIT 1")
-        last_run_row = cur.fetchone()
+            cur.execute("SELECT run_at FROM crawl_logs WHERE status = 'success' ORDER BY run_at DESC LIMIT 1")
+            last_run_row = cur.fetchone()
 
     return {
         "by_game": {row["game"]: row["cnt"] for row in by_game_rows if row["game"]},

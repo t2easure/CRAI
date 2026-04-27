@@ -83,8 +83,14 @@ export default function PostsTable({
               </td>
               <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
                 {post.date ? (() => {
-                  const d = new Date(post.date.replace(' ', 'T'))
-                  return isNaN(d.getTime()) ? post.date : d.toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                  const s = post.date.trim()
+                  // 시간 포함 여부 확인 (YYYY-MM-DD HH:MM)
+                  if (s.length > 10) {
+                    const d = new Date(s.replace(' ', 'T'))
+                    return isNaN(d.getTime()) ? s : d.toLocaleString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+                  }
+                  // 날짜만 있는 경우 (YYYY-MM-DD)
+                  return s.replace(/-/g, '. ')
                 })() : '-'}
               </td>
             </tr>

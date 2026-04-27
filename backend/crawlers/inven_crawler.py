@@ -4,7 +4,7 @@ import asyncio
 from datetime import date, datetime, timezone, timedelta
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
-from utils.config import DATA_DIR, get_last_run
+from utils.config import DATA_DIR
 
 BOARDS = [
     {"game": "lineage_classic", "url": "https://www.inven.co.kr/board/lineageclassic/6482"},
@@ -21,19 +21,26 @@ def is_recent(item: dict, since: datetime) -> bool:
     date_str = item.get("date", "").strip()
     if not date_str:
         return False
-    today = date.today()
+    # KST 기준 오늘 날짜
+    KST = timezone(timedelta(hours=9))
+    today_kst = datetime.now(KST).date()
+    since_date = (since.astimezone(KST)).date()
     try:
         if ":" in date_str and "-" not in date_str:
-            post_dt = datetime.strptime(f"{today} {date_str}", "%Y-%m-%d %H:%M")
+            # HH:MM 형식 — 오늘 KST 날짜
+            post_date = today_kst
         elif len(date_str) == 5:
-            # MM-DD 형식 — 올해 날짜가 오늘보다 미래면 작년으로 처리
-            candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
-            year = today.year if candidate <= today else today.year - 1
-            post_dt = datetime.strptime(f"{year}-{date_str}", "%Y-%m-%d")
+            # MM-DD 형식
+            candidate = datetime.strptime(f"{today_kst.year}-{date_str}", "%Y-%m-%d").date()
+            year = today_kst.year if candidate <= today_kst else today_kst.year - 1
+            post_date = datetime.strptime(f"{year}-{date_str}", "%Y-%m-%d").date()
+        elif len(date_str) == 16:
+            # YYYY-MM-DD HH:MM 형식 (crawl_board에서 변환된 날짜)
+            post_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M").date()
         else:
-            post_dt = datetime.strptime(date_str, "%Y-%m-%d")
-        post_dt = post_dt.replace(tzinfo=timezone.utc)
-        return post_dt >= since
+            # YYYY-MM-DD 형식
+            post_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        return post_date >= since_date
     except ValueError:
         return False
 
@@ -77,7 +84,9 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
             print(f"  -> no data, stop")
             break
 
-        today = date.today()
+        KST = timezone(timedelta(hours=9))
+        now_kst = datetime.now(KST)
+        today = now_kst.date()
         for item in items:
             if item.get("url") and not item["url"].startswith("http"):
                 item["url"] = "https://www.inven.co.kr" + item["url"]
@@ -86,7 +95,11 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
             date_str = item.get("date", "").strip()
             if date_str:
                 if ":" in date_str and "-" not in date_str:
-                    item["date"] = f"{today} {date_str}"
+                    # 현재 시간보다 미래면 어제 날짜로 처리
+                    candidate = datetime.strptime(f"{today} {date_str}", "%Y-%m-%d %H:%M")
+                    if candidate > now_kst.replace(tzinfo=None):
+                        candidate -= timedelta(days=1)
+                    item["date"] = candidate.strftime("%Y-%m-%d %H:%M")
                 elif len(date_str) == 5:
                     candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
                     year = today.year if candidate <= today else today.year - 1
@@ -107,7 +120,7 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
 
 async def crawl():
     all_items = []
-    since = get_last_run()
+    since = datetime.now(timezone.utc) - timedelta(hours=48)
 
     async with AsyncWebCrawler(verbose=False) as crawler:
         for board in BOARDS:

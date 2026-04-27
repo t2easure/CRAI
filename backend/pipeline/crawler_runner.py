@@ -1,13 +1,15 @@
 import sys
 import traceback
 import asyncio
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 from concurrent.futures import ThreadPoolExecutor
 from crawlers import reddit_crawler, bilibili_crawler, inven_crawler
 from db.database import init_db, log_crawl, save_posts
-from utils.config import update_last_run
 
 
 def _run_safe(name, source, run_fn):
@@ -53,8 +55,6 @@ async def run_all():
         inven_result = ("인벤", {"status": "error", "error": str(e)})
 
     results = dict(list(sync_results) + [inven_result])
-
-    update_last_run()
 
     print(f"\n{'='*40}")
     print("[Pipeline] 전체 실행 완료")
