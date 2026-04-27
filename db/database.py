@@ -40,6 +40,19 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crawl_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_at TEXT,
+                source TEXT,
+                game TEXT,
+                status TEXT,
+                count INTEGER,
+                error_msg TEXT
+            )
+            """
+        )
         conn.commit()
 
 
@@ -190,3 +203,38 @@ def delete_expired_json_files(days: int = 30) -> int:
                     removed += 1
 
     return removed
+
+
+def log_crawl(
+    source: str,
+    game: str,
+    status: str,
+    count: int = 0,
+    error_msg: str = None,
+) -> None:
+    """크롤링 실행 결과를 crawl_logs 테이블에 기록."""
+    run_at = datetime.now(timezone.utc).isoformat()
+    with _get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO crawl_logs (run_at, source, game, status, count, error_msg)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (run_at, source, game, status, count, error_msg),
+        )
+        conn.commit()
+
+
+def get_crawl_logs(limit: int = 50) -> list[dict]:
+    """최근 crawl_logs 조회. 최신순 정렬."""
+    with _get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, run_at, source, game, status, count, error_msg
+            FROM crawl_logs
+            ORDER BY run_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
