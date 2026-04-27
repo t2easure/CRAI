@@ -134,9 +134,9 @@ DATABASE_URL=postgresql://user:password@your-rds-endpoint:5432/crai
 ### 백엔드 (FastAPI)
 ```bash
 cd backend
-uvicorn api.main:app --reload
-# → http://localhost:8000
-# → http://localhost:8000/docs (Swagger UI)
+uvicorn api.main:app --reload --port 8001
+# → http://localhost:8001
+# → http://localhost:8001/docs (Swagger UI)
 ```
 
 ### 프론트엔드 (Next.js)
@@ -194,15 +194,25 @@ python -m pipeline.crawler_runner
 
 ## 구현 현황
 
+### 완료
 - [x] 프로젝트 구조 설계 (backend / frontend 분리)
 - [x] Reddit 크롤러 — 리니지 시리즈 전 게임, LineageOS 필터링
 - [x] Bilibili 크롤러 — 게임별 키워드 검색
-- [x] 인벤 크롤러 — 6개 게임 자유게시판 (crawl4ai + Playwright)
-- [x] pipeline/crawler_runner.py — 병렬 실행, RDS 자동 저장
+- [x] 인벤 크롤러 — 6개 게임 자유게시판 (crawl4ai + Playwright), KST 날짜 처리
+- [x] pipeline/crawler_runner.py — Reddit/Bilibili 병렬 실행, RDS 자동 저장, 중복 skip
 - [x] DB 연동 (AWS RDS PostgreSQL) — posts, crawl_logs 테이블
 - [x] 스케줄러 — 6시간 정기 실행, 30일 만료 데이터 자동 삭제
-- [x] FastAPI 백엔드 — /posts, /stats, /logs, /crawl, /reports
-- [x] Next.js 대시보드 — 수집 현황 차트, 게시글 테이블, 수동 크롤링 버튼
+- [x] FastAPI 백엔드 — /posts, /stats, /crawl, /reports (port 8001)
+- [x] Next.js 대시보드 — 수집 현황 차트, 게임/소스별 필터, 게시글 테이블, 수동 크롤링 버튼
 - [x] AWS EC2 + RDS 연동
-- [ ] AI 분석 모듈 (Claude API — 필터/번역/분류/분석/보고서 에이전트)
-- [ ] 보고서 조회 UI
+- [x] 크롤링 로그 기록 (crawl_logs) 및 마지막 크롤링 시간 표시
+
+### 미완료 (6~9주차)
+- [ ] AI 분석 모듈 (Claude API)
+  - [ ] 필터 에이전트 — 리니지 무관 데이터 제거, 게임별 분류
+  - [ ] 번역 에이전트 — 중국어/영어 → 한국어
+  - [ ] 분류 에이전트 — 핵/봇, 업데이트, 시세, 여론 카테고리
+  - [ ] 분석 에이전트 — 트렌드 감지, 이상 징후 탐지
+  - [ ] 보고서 에이전트 — 최종 리포트 생성
+- [ ] Validator — 각 에이전트 검증 및 재시도 로직
+- [ ] 보고서 저장 (trend_reports 테이블) 및 조회 UI
