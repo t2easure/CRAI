@@ -3,6 +3,7 @@ from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from db.database import delete_expired_json_files, delete_expired_posts
 from pipeline.crawler_runner import run_all
 
 
@@ -23,6 +24,9 @@ async def run_crawling_job() -> None:
     try:
         results = await run_all()
         print(f"[Scheduler] 크롤링 완료: {_format_summary(results)}")
+        deleted_posts = delete_expired_posts(days=30)
+        deleted_json = delete_expired_json_files(days=30)
+        print(f"[Scheduler] 만료 처리 완료: posts {deleted_posts}건 삭제, json {deleted_json}개 삭제")
     except Exception as exc:
         print(f"[Scheduler] 크롤링 실패: {exc}")
     finally:

@@ -1,7 +1,7 @@
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from db.preprocess import preprocess
@@ -140,3 +140,53 @@ def get_stats() -> dict:
         "by_source": {row["source"]: row["cnt"] for row in by_source_rows if row["source"]},
         "total": total_row["cnt"] if total_row else 0,
     }
+
+
+def delete_expired_posts(days: int = 30) -> int:
+    """
+    created_at 기준 days일 이상 지난 posts 삭제.
+    삭제된 건수 반환.
+    """
+    threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    with _get_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM posts WHERE created_at < ?", (threshold,))
+        conn.commit()
+        return cur.rowcount
+
+
+def delete_expired_json_files(days: int = 30) -> int:
+    """
+    data/{플랫폼}/{game}/ 디렉토리의 JSON 파일 중
+    파일명 날짜(YYYY-MM-DD) 기준 days일 이상 지난 파일 삭제.
+    삭제된 파일 수 반환.
+    """
+    threshold_date = (datetime.now() - timedelta(days=days)).date()
+    removed = 0
+
+    for platform in ("reddit", "bilibili", "inven"):
+        platform_dir = os.path.abspath(os.path.join(DATA_DIR, platform))
+        if not os.path.isdir(platform_dir):
+            continue
+
+        for game in os.listdir(platform_dir):
+            game_dir = os.path.join(platform_dir, game)
+            if not os.path.isdir(game_dir):
+                continue
+
+            for filename in os.listdir(game_dir):
+                if not filename.endswith(".json"):
+                    continue
+
+                date_prefix = filename[:10]
+                try:
+                    file_date = datetime.strptime(date_prefix, "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+
+                if file_date <= threshold_date:
+                    os.remove(os.path.join(game_dir, filename))
+                    removed += 1
+
+    return removed
