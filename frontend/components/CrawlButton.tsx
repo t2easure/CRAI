@@ -20,7 +20,7 @@ export default function CrawlButton({ onComplete }: CrawlButtonProps) {
         setMessage('크롤링이 완료되었습니다.')
         onComplete()
       } else {
-        setMessage(`오류: ${data.message}`)
+        setMessage(`오류: ${data.message || '알 수 없는 오류가 발생했습니다.'}`)
       }
     } catch {
       setMessage('크롤링 요청 중 오류가 발생했습니다.')
