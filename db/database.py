@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+from db.preprocess import preprocess
 from utils.config import DATA_DIR
 
 
@@ -44,6 +45,10 @@ def init_db() -> None:
 
 def save_posts(items: list[dict]) -> int:
     """아이템 리스트 저장. 중복 url은 skip. 저장된 건수 반환."""
+    if not items:
+        return 0
+
+    items = preprocess(items)
     if not items:
         return 0
 
