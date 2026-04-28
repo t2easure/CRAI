@@ -53,6 +53,26 @@ def init_db() -> None:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS trend_reports (
+                    id SERIAL PRIMARY KEY,
+                    created_at TEXT,
+                    game TEXT,
+                    period_start TEXT,
+                    period_end TEXT,
+                    summary TEXT,
+                    category_filter TEXT,
+                    category_translation TEXT,
+                    category_classification TEXT,
+                    category_analysis TEXT,
+                    full_report TEXT,
+                    keywords TEXT,
+                    trend_level TEXT,
+                    post_count INTEGER
+                )
+                """
+            )
         conn.commit()
 
 
@@ -239,3 +259,88 @@ def get_crawl_logs(limit: int = 50) -> list[dict]:
                 (limit,),
             )
             return [dict(row) for row in cur.fetchall()]
+
+
+def save_report(report: dict) -> int:
+    """보고서 저장. 저장된 id 반환."""
+    now_utc = datetime.now(timezone.utc).isoformat()
+    keywords = report.get("keywords")
+    if isinstance(keywords, list):
+        keywords = ",".join(keywords)
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO trend_reports (
+                    created_at, game, period_start, period_end,
+                    summary, category_filter, category_translation,
+                    category_classification, category_analysis, full_report,
+                    keywords, trend_level, post_count
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    now_utc,
+                    report.get("game"),
+                    report.get("period_start"),
+                    report.get("period_end"),
+                    report.get("summary"),
+                    report.get("category_filter"),
+                    report.get("category_translation"),
+                    report.get("category_classification"),
+                    report.get("category_analysis"),
+                    report.get("full_report"),
+                    keywords,
+                    report.get("trend_level"),
+                    report.get("post_count"),
+                ),
+            )
+            report_id = cur.fetchone()[0]
+        conn.commit()
+    return report_id
+
+
+def get_reports(game: str = None, limit: int = 20) -> list[dict]:
+    """보고서 목록 조회. 최신순."""
+    query = "SELECT * FROM trend_reports WHERE TRUE"
+    params: list[Any] = []
+    if game:
+        query += " AND game = %s"
+        params.append(game)
+    query += " ORDER BY created_at DESC LIMIT %s"
+    params.append(limit)
+
+    with _get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(query, params)
+            rows = [dict(row) for row in cur.fetchall()]
+            for r in rows:
+                if r.get("keywords"):
+                    r["keywords"] = r["keywords"].split(",")
+                else:
+                    r["keywords"] = []
+            return rows
+
+
+def get_report(report_id: int) -> dict | None:
+    """보고서 단건 조회."""
+    with _get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM trend_reports WHERE id = %s", (report_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            r = dict(row)
+            r["keywords"] = r["keywords"].split(",") if r.get("keywords") else []
+            return r
+
+
+def delete_report(report_id: int) -> bool:
+    """보고서 삭제. 삭제 성공 여부 반환."""
+    with _get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM trend_reports WHERE id = %s", (report_id,))
+            deleted = cur.rowcount > 0
+        conn.commit()
+    return deleted
