@@ -4,7 +4,7 @@ const API = 'http://localhost:8001'
 
 export async function POST() {
   try {
-    const res = await fetch(`${API}/crawl`, { method: 'POST', signal: AbortSignal.timeout(300000) })
+    const res = await fetch(`${API}/crawl`, { method: 'POST', signal: AbortSignal.timeout(900000) })
     const data = await res.json()
     return NextResponse.json(data)
   } catch (e: unknown) {

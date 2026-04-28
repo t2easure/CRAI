@@ -7,15 +7,7 @@ import PostsTable from '@/components/PostsTable'
 import CrawlButton from '@/components/CrawlButton'
 import TrendReport, { type Report } from '@/components/TrendReport'
 import type { Post } from '@/app/api/posts/route'
-
-const GAME_LABELS: Record<string, string> = {
-  lineage_classic: '리니지 클래식',
-  lineage_remaster: '리니지 리마스터',
-  lineage2: '리니지2',
-  lineage_m: '리니지M',
-  lineage2m: '리니지2M',
-  lineage_w: '리니지W',
-}
+import { GAME_LABELS } from '@/lib/gameLabels'
 
 const DUMMY_REPORTS: Report[] = [
   {
