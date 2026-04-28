@@ -5,7 +5,7 @@
 | 항목 | 값 |
 |------|-----|
 | 인스턴스 ID | i-0b1ebb5edea89778f |
-| 퍼블릭 IP | 98.80.229.24 |
+| 퍼블릭 IP | 13.223.75.247 |
 | 유저명 | ubuntu |
 | 키 페어 | ku-hys-01-key.pem |
 | OS | Ubuntu 24.04 LTS |
@@ -21,7 +21,7 @@
 > cmd에서는 접속이 안 될 수 있습니다. **PowerShell**에서 실행하세요.
 
 ```powershell
-ssh -i "C:\Users\User\Desktop\CRAI\ku-hys-01-key.pem" ubuntu@98.80.229.24
+ssh -i "C:\Users\User\Desktop\CRAI\ku-hys-01-key.pem" ubuntu@13.223.75.247
 ```
 
 접속 성공 시 아래와 같은 프롬프트가 뜹니다:
@@ -47,7 +47,7 @@ icacls "C:\Users\User\Desktop\CRAI\ku-hys-01-key.pem" /inheritance:r /grant:r "U
 
 ```
 Host crai-ec2
-    HostName 98.80.229.24
+    HostName 13.223.75.247
     User ubuntu
     IdentityFile C:\Users\User\Desktop\CRAI\ku-hys-01-key.pem
 ```
@@ -90,8 +90,8 @@ playwright install chromium
 ### .env 파일 생성
 ```bash
 cat > ~/CRAI/.env << 'EOF'
-APIFY_API_TOKEN=apify_api_MRuM2Xlld2kHhbp4tCGShAaoSnGB6A0vwTgW
-DATABASE_URL=postgresql://postgres:canvas2026@ku-hys-01-db.cgxkyy4aox5u.us-east-1.rds.amazonaws.com:5432/crai?sslmode=require
+APIFY_API_TOKEN=<your_apify_api_token>
+DATABASE_URL=postgresql://postgres:<password>@<rds-endpoint>:5432/crai?sslmode=require
 EOF
 ```
 
