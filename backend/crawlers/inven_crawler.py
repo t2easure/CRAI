@@ -130,20 +130,15 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
         recent_items = [i for i in items if _is_recent(i.get("date", ""), since)]
         print(f"  -> {len(items)} total / {len(recent_items)} recent, fetching details...")
 
-        # 상세 페이지 동시 3개씩 (봇 차단 방지)
-        sem = asyncio.Semaphore(3)
-
-        async def fetch_with_sem(item):
-            async with sem:
-                if item.get("url"):
-                    detail = await _fetch_detail(crawler, item["url"])
-                    if detail.get("date"):
-                        item["date"] = detail["date"]
-                    if detail.get("content"):
-                        item["content"] = detail["content"]
-                await asyncio.sleep(1)
-
-        await asyncio.gather(*[fetch_with_sem(item) for item in recent_items])
+        # 상세 페이지 순차 (봇 차단 방지)
+        for item in recent_items:
+            if item.get("url"):
+                detail = await _fetch_detail(crawler, item["url"])
+                if detail.get("date"):
+                    item["date"] = detail["date"]
+                if detail.get("content"):
+                    item["content"] = detail["content"]
+            await asyncio.sleep(1)
 
         all_items.extend(recent_items)
 
@@ -160,7 +155,12 @@ async def crawl():
     all_items = []
     since = datetime.now(timezone.utc) - timedelta(hours=48)
 
-    async with AsyncWebCrawler(verbose=False) as crawler:
+    from crawl4ai import BrowserConfig
+    browser_cfg = BrowserConfig(
+        headless=True,
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    )
+    async with AsyncWebCrawler(config=browser_cfg, verbose=False) as crawler:
         for board in BOARDS:
             items = await crawl_board(crawler, board, since)
             if items:
