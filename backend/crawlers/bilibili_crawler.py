@@ -1,8 +1,8 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from apify_client import ApifyClient
-from utils.config import APIFY_API_TOKEN, DATA_DIR, get_last_run
+from utils.config import APIFY_API_TOKEN, DATA_DIR
 
 ACTOR_ID = "zhorex/bilibili-scraper"
 
@@ -31,7 +31,7 @@ def is_recent(item: dict, since: datetime) -> bool:
 
 def run():
     client = ApifyClient(APIFY_API_TOKEN)
-    since = get_last_run()
+    since = datetime.now(timezone.utc) - timedelta(hours=48)
     all_items = []
 
     for game, keywords in GAME_KEYWORDS.items():
