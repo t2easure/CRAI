@@ -46,9 +46,8 @@ async def run_all():
     print("\n[인벤] 크롤러 시작...")
     try:
         items = await inven_crawler.crawl()
-        saved = save_posts(items)
-        log_crawl(source="inven", game="all", status="success", count=saved)
-        inven_result = ("인벤", {"status": "success", "count": len(items), "saved": saved})
+        log_crawl(source="inven", game="all", status="success", count=len(items))
+        inven_result = ("인벤", {"status": "success", "count": len(items), "saved": len(items)})
     except Exception as e:
         traceback.print_exc()
         log_crawl(source="inven", game="all", status="error", count=0, error_msg=str(e))

@@ -1,7 +1,7 @@
 import json
 import os
 import asyncio
-from datetime import date, datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode
 from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
 from utils.config import DATA_DIR
@@ -15,36 +15,9 @@ BOARDS = [
     {"game": "lineage_w", "url": "https://www.inven.co.kr/board/lineagew/5831"},
 ]
 
-MAX_PAGES = 5
+MAX_PAGES = 2
 
-def is_recent(item: dict, since: datetime) -> bool:
-    date_str = item.get("date", "").strip()
-    if not date_str:
-        return False
-    # KST 기준 오늘 날짜
-    KST = timezone(timedelta(hours=9))
-    today_kst = datetime.now(KST).date()
-    since_date = (since.astimezone(KST)).date()
-    try:
-        if ":" in date_str and "-" not in date_str:
-            # HH:MM 형식 — 오늘 KST 날짜
-            post_date = today_kst
-        elif len(date_str) == 5:
-            # MM-DD 형식
-            candidate = datetime.strptime(f"{today_kst.year}-{date_str}", "%Y-%m-%d").date()
-            year = today_kst.year if candidate <= today_kst else today_kst.year - 1
-            post_date = datetime.strptime(f"{year}-{date_str}", "%Y-%m-%d").date()
-        elif len(date_str) == 16:
-            # YYYY-MM-DD HH:MM 형식 (crawl_board에서 변환된 날짜)
-            post_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M").date()
-        else:
-            # YYYY-MM-DD 형식
-            post_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        return post_date >= since_date
-    except ValueError:
-        return False
-
-schema = {
+list_schema = {
     "name": "inven_posts",
     "baseSelector": "tbody tr",
     "fields": [
@@ -59,22 +32,81 @@ schema = {
     ],
 }
 
-config = CrawlerRunConfig(
-    extraction_strategy=JsonCssExtractionStrategy(schema),
+detail_schema = {
+    "name": "inven_detail",
+    "baseSelector": "body",
+    "fields": [
+        {"name": "date", "selector": ".articleDate", "type": "text"},
+        {"name": "content", "selector": "#powerbbsContent", "type": "text"},
+    ],
+}
+
+list_config = CrawlerRunConfig(
+    extraction_strategy=JsonCssExtractionStrategy(list_schema),
     cache_mode=CacheMode.BYPASS,
 )
+
+detail_config = CrawlerRunConfig(
+    extraction_strategy=JsonCssExtractionStrategy(detail_schema),
+    cache_mode=CacheMode.BYPASS,
+)
+
+
+def _parse_list_date(date_str: str, now_kst: datetime) -> str:
+    """목록 날짜(HH:MM, MM-DD, YYYY-MM-DD)를 YYYY-MM-DD 또는 YYYY-MM-DD HH:MM 문자열로 변환."""
+    date_str = date_str.strip()
+    today = now_kst.date()
+    if ":" in date_str and "-" not in date_str:
+        candidate = datetime.strptime(f"{today} {date_str}", "%Y-%m-%d %H:%M")
+        if candidate > now_kst.replace(tzinfo=None):
+            candidate -= timedelta(days=1)
+        return candidate.strftime("%Y-%m-%d %H:%M")
+    elif len(date_str) == 5:
+        candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
+        year = today.year if candidate <= today else today.year - 1
+        return f"{year}-{date_str}"
+    return date_str
+
+
+def _is_recent(date_str: str, since: datetime) -> bool:
+    """날짜 문자열이 since 이후인지 확인."""
+    KST = timezone(timedelta(hours=9))
+    since_date = since.astimezone(KST).date()
+    try:
+        if len(date_str) == 16:
+            post_date = datetime.strptime(date_str, "%Y-%m-%d %H:%M").date()
+        else:
+            post_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+        return post_date >= since_date
+    except ValueError:
+        return False
+
+
+async def _fetch_detail(crawler, url: str) -> dict:
+    """상세 페이지에서 정확한 날짜와 본문 가져오기."""
+    try:
+        result = await crawler.arun(url=url, config=detail_config)
+        if result.extracted_content:
+            data = json.loads(result.extracted_content)
+            if data:
+                return {"date": data[0].get("date", ""), "content": data[0].get("content", "")}
+    except Exception:
+        pass
+    return {}
+
 
 async def crawl_board(crawler, board: dict, since: datetime) -> list:
     game = board["game"]
     base_url = board["url"]
     all_items = []
+    KST = timezone(timedelta(hours=9))
+    now_kst = datetime.now(KST)
 
     for page in range(1, MAX_PAGES + 1):
         url = f"{base_url}?p={page}"
         print(f"[Inven/{game}] page {page}...")
 
-        result = await crawler.arun(url=url, config=config)
-
+        result = await crawler.arun(url=url, config=list_config)
         if not result.success:
             print(f"  -> failed: {result.error_message}")
             break
@@ -84,34 +116,34 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
             print(f"  -> no data, stop")
             break
 
-        KST = timezone(timedelta(hours=9))
-        now_kst = datetime.now(KST)
-        today = now_kst.date()
+        # URL 보정 + 목록 날짜 변환
         for item in items:
             if item.get("url") and not item["url"].startswith("http"):
                 item["url"] = "https://www.inven.co.kr" + item["url"]
             item["game"] = game
             item["source"] = "inven"
-            date_str = item.get("date", "").strip()
-            if date_str:
-                if ":" in date_str and "-" not in date_str:
-                    # 현재 시간보다 미래면 어제 날짜로 처리
-                    candidate = datetime.strptime(f"{today} {date_str}", "%Y-%m-%d %H:%M")
-                    if candidate > now_kst.replace(tzinfo=None):
-                        candidate -= timedelta(days=1)
-                    item["date"] = candidate.strftime("%Y-%m-%d %H:%M")
-                elif len(date_str) == 5:
-                    candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
-                    year = today.year if candidate <= today else today.year - 1
-                    item["date"] = f"{year}-{date_str}"
+            raw_date = item.get("date", "").strip()
+            if raw_date:
+                item["date"] = _parse_list_date(raw_date, now_kst)
 
-        recent = [i for i in items if is_recent(i, since)]
-        print(f"  -> {len(items)} total / {len(recent)} recent")
+        # 목록 날짜 기준으로 기간 내 게시글만 필터 (상세 요청 최소화)
+        recent_items = [i for i in items if _is_recent(i.get("date", ""), since)]
+        print(f"  -> {len(items)} total / {len(recent_items)} recent, fetching details...")
 
-        if len(recent) < len(items):
-            all_items.extend(recent)
+        # 상세 페이지 순차 (봇 차단 방지)
+        for item in recent_items:
+            if item.get("url"):
+                detail = await _fetch_detail(crawler, item["url"])
+                if detail.get("date"):
+                    item["date"] = detail["date"]
+                if detail.get("content"):
+                    item["content"] = detail["content"]
+            await asyncio.sleep(1)
+
+        all_items.extend(recent_items)
+
+        if len(recent_items) < len(items):
             break
-        all_items.extend(recent)
 
         await asyncio.sleep(1.5)
 
@@ -119,14 +151,24 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
 
 
 async def crawl():
+    from db.database import save_posts
     all_items = []
     since = datetime.now(timezone.utc) - timedelta(hours=48)
 
-    async with AsyncWebCrawler(verbose=False) as crawler:
+    from crawl4ai import BrowserConfig
+    browser_cfg = BrowserConfig(
+        headless=True,
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    )
+    async with AsyncWebCrawler(config=browser_cfg, verbose=False) as crawler:
         for board in BOARDS:
             items = await crawl_board(crawler, board, since)
+            if items:
+                saved = save_posts(items)
+                print(f"[Inven/{board['game']}] {len(items)} items collected, {saved} saved to DB")
+            else:
+                print(f"[Inven/{board['game']}] 0 items collected")
             all_items.extend(items)
-            print(f"[Inven/{board['game']}] {len(items)} items collected")
 
     print(f"[Inven] total: {len(all_items)} items")
 
