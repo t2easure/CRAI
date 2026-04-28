@@ -32,7 +32,7 @@ def is_recent(item: dict, since: datetime) -> bool:
 
 def run():
     client = ApifyClient(APIFY_API_TOKEN)
-    since = datetime.now(timezone.utc) - timedelta(hours=48)
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
     all_items = []
 
     for subreddit in SUBREDDITS:

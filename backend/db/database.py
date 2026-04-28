@@ -73,6 +73,18 @@ def init_db() -> None:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS report_posts (
+                    id SERIAL PRIMARY KEY,
+                    report_id INTEGER NOT NULL REFERENCES trend_reports(id) ON DELETE CASCADE,
+                    post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+                    evidence_role TEXT,
+                    created_at TEXT,
+                    UNIQUE (report_id, post_id)
+                )
+                """
+            )
         conn.commit()
 
 
@@ -122,33 +134,41 @@ def save_posts(items: list[dict]) -> int:
     return inserted
 
 
-def get_posts(game: str = None, source: str = None, since: str = None) -> list[dict]:
+def get_posts(
+    game: str = None,
+    source: str = None,
+    since: str = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
     """
-    조건별 posts 조회.
-    - game: 특정 게임만 필터 (None이면 전체)
-    - source: 특정 소스만 필터 (None이면 전체)
-    - since: ISO format 날짜 문자열, created_at >= since 조건 (None이면 전체)
-    반환: list of dict (컬럼명 → 값)
+    조건별 posts 조회. (total, paginated rows) 반환.
     """
-    query = "SELECT * FROM posts WHERE TRUE"
+    where = "WHERE TRUE"
     params: list[Any] = []
 
     if game:
-        query += " AND game = %s"
+        where += " AND game = %s"
         params.append(game)
     if source:
-        query += " AND source = %s"
+        where += " AND source = %s"
         params.append(source)
     if since:
-        query += " AND created_at >= %s"
+        where += " AND created_at >= %s"
         params.append(since)
-
-    query += " ORDER BY date DESC NULLS LAST"
 
     with _get_connection() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, params)
-            return [dict(row) for row in cur.fetchall()]
+            cur.execute(f"SELECT COUNT(*) AS cnt FROM posts {where}", params)
+            total = cur.fetchone()["cnt"]
+
+            cur.execute(
+                f"SELECT * FROM posts {where} ORDER BY date DESC NULLS LAST LIMIT %s OFFSET %s",
+                params + [limit, offset],
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+
+    return rows, total
 
 
 def get_stats() -> dict:
@@ -173,6 +193,27 @@ def get_stats() -> dict:
         "total": total_row["cnt"] if total_row else 0,
         "last_run": last_run_row["run_at"] if last_run_row else None,
     }
+
+
+def get_timeline(days: int = 14) -> list[dict]:
+    """최근 N일간 날짜별 소스별 수집 건수 반환."""
+    threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    LEFT(created_at, 10) AS date,
+                    source,
+                    COUNT(*) AS cnt
+                FROM posts
+                WHERE created_at >= %s AND source IS NOT NULL
+                GROUP BY LEFT(created_at, 10), source
+                ORDER BY date ASC
+                """,
+                (threshold,),
+            )
+            return [dict(row) for row in cur.fetchall()]
 
 
 def delete_expired_posts(days: int = 30) -> int:

@@ -12,8 +12,7 @@ def list_posts(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
-    all_posts = get_posts(game=game, source=source)
-    total = len(all_posts)
+    offset = (page - 1) * limit
+    posts, total = get_posts(game=game, source=source, limit=limit, offset=offset)
     total_pages = max(1, -(-total // limit))
-    paginated = all_posts[(page - 1) * limit : page * limit]
-    return {"posts": paginated, "total": total, "page": page, "totalPages": total_pages}
+    return {"posts": posts, "total": total, "page": page, "totalPages": total_pages}

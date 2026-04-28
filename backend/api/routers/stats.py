@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from db.database import get_stats, get_crawl_logs
+from db.database import get_stats, get_crawl_logs, get_timeline
 
 router = APIRouter(tags=["stats"])
 
@@ -14,6 +14,11 @@ def stats():
         "bySource": data["by_source"],
         "lastRun": data["last_run"],
     }
+
+
+@router.get("/stats/timeline")
+def timeline(days: int = Query(14, ge=1, le=90)):
+    return get_timeline(days=days)
 
 
 @router.get("/logs")
