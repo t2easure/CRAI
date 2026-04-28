@@ -53,6 +53,26 @@ def init_db() -> None:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS trend_reports (
+                    id SERIAL PRIMARY KEY,
+                    created_at TEXT,
+                    game TEXT,
+                    period_start TEXT,
+                    period_end TEXT,
+                    summary TEXT,
+                    category_filter TEXT,
+                    category_translation TEXT,
+                    category_classification TEXT,
+                    category_analysis TEXT,
+                    full_report TEXT,
+                    keywords TEXT,
+                    trend_level TEXT,
+                    post_count INTEGER
+                )
+                """
+            )
         conn.commit()
 
 
