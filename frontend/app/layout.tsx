@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'CheatHunterAI Dashboard',
+  title: 'CRAI',
   description: '게임 커뮤니티 모니터링 대시보드',
 }
 
