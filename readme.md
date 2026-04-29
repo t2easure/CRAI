@@ -389,7 +389,7 @@ ssh -i "C:\path\to\key.pem" ubuntu@<EC2_PUBLIC_IP>
 
 | 담당 | 브랜치 | 작업 내용 |
 |------|--------|----------|
-| 팀장 (황윤서) | `main` / `crawler` | 전체 아키텍처 설계, 크롤러 파이프라인, FastAPI 백엔드, AWS 인프라 구축, AI 에이전트 (예정) |
+| 팀장 (연지) | `main` / `crawler` | 전체 아키텍처 설계, 크롤러 파이프라인, FastAPI 백엔드, AWS 인프라 구축, AI 에이전트 (예정) |
 | 팀원 A (정빈) | `scheduler-db` | AWS RDS 연동, 데이터 전처리, 30일 만료 처리, 크롤링 로그, 스케줄러, DB CLI |
 | 팀원 B (은수) | `dashboard` | Next.js 대시보드, 수집 현황 차트, 게시글 테이블, AI 리포트 UI, 필터·페이지네이션 |
 
