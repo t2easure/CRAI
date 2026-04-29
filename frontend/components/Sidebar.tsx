@@ -14,6 +14,7 @@ const SOURCES = [
   { value: 'reddit', label: 'Reddit' },
   { value: 'bilibili', label: 'Bilibili' },
   { value: 'inven', label: '인벤' },
+  { value: 'bahamut', label: 'Bahamut' },
 ]
 
 const CATEGORIES = [

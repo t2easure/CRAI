@@ -22,9 +22,8 @@ export default function CrawlButton({ onComplete }: CrawlButtonProps) {
       const beforeStats = await beforeStatsRes.json()
       const beforeTotal = beforeStats.total ?? 0
       const beforeLogs = await beforeLogsRes.json().catch(() => [])
-      const lastLogBefore: string | null = Array.isArray(beforeLogs) && beforeLogs[0]
-        ? beforeLogs[0].run_at
-        : null
+      const beforePipelineLog = Array.isArray(beforeLogs) ? beforeLogs.find((l: {source: string; run_at: string}) => l.source === 'pipeline') : null
+      const lastLogBefore: string | null = beforePipelineLog ? beforePipelineLog.run_at : null
 
       const res = await fetch('/api/crawl', { method: 'POST' })
       const data = await res.json()
@@ -54,8 +53,9 @@ export default function CrawlButton({ onComplete }: CrawlButtonProps) {
         const lastLog = Array.isArray(logs) ? logs[0] : null
         const elapsed = Math.round((Date.now() - startTime) / 1000)
 
-        // 크롤링 시작 전 마지막 로그보다 최신 로그가 생겼으면 완료로 판단
-        const isNewLog = lastLog && lastLog.run_at !== lastLogBefore
+        // pipeline 소스 로그가 새로 생겼으면 전체 완료로 판단
+        const pipelineLog = Array.isArray(logs) ? logs.find((l: {source: string; run_at: string}) => l.source === 'pipeline') : null
+        const isNewLog = pipelineLog && pipelineLog.run_at !== lastLogBefore
         if (isNewLog) {
           const newCount = (stats.total ?? 0) - beforeTotal
           setMessage(`크롤링 완료! ${newCount > 0 ? `${newCount}건 새로 수집` : '새 데이터 없음'} (${elapsed}초 소요)`)

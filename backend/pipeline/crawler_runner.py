@@ -1,4 +1,5 @@
 import sys
+import time
 import traceback
 import asyncio
 from pathlib import Path
@@ -8,7 +9,7 @@ load_dotenv(Path(__file__).parent.parent.parent / '.env')
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 from concurrent.futures import ThreadPoolExecutor
-from crawlers import reddit_crawler, bilibili_crawler, inven_crawler
+from crawlers import reddit_crawler, bilibili_crawler, inven_crawler, bahamut_crawler
 from db.database import init_db, log_crawl, save_posts
 
 
@@ -25,6 +26,7 @@ def _run_safe(name, source, run_fn):
 
 
 async def run_all():
+    start_time = time.time()
     init_db()
     crawlers_sync = [
         ("Reddit", "reddit", reddit_crawler.run),
@@ -54,7 +56,19 @@ async def run_all():
         log_crawl(source="inven", game="all", status="error", count=0, error_msg=str(e))
         inven_result = ("인벤", {"status": "error", "error": str(e)})
 
-    results = dict(list(sync_results) + [inven_result])
+    # 바하무트도 async 함수라 직접 await
+    print("\n[바하무트] 크롤러 시작...")
+    try:
+        items = await bahamut_crawler.crawl()
+        saved = save_posts(items)
+        log_crawl(source="bahamut", game="all", status="success", count=saved)
+        bahamut_result = ("바하무트", {"status": "success", "count": len(items), "saved": saved})
+    except Exception as e:
+        traceback.print_exc()
+        log_crawl(source="bahamut", game="all", status="error", count=0, error_msg=str(e))
+        bahamut_result = ("바하무트", {"status": "error", "error": str(e)})
+
+    results = dict(list(sync_results) + [inven_result, bahamut_result])
 
     print(f"\n{'='*40}")
     print("[Pipeline] 전체 실행 완료")
@@ -64,6 +78,13 @@ async def run_all():
         else:
             print(f"  {name}: 실패 - {result['error']}")
     print(f"{'='*40}")
+
+    elapsed = time.time() - start_time
+    mins, secs = divmod(int(elapsed), 60)
+    print(f"[Pipeline] 총 소요 시간: {mins}분 {secs}초")
+
+    total_saved = sum(v.get("saved", 0) for v in results.values() if v.get("status") == "success")
+    log_crawl(source="pipeline", game="all", status="success", count=total_saved)
 
     return results
 

@@ -133,10 +133,12 @@ function SourceBadge({ source }: { source: string }) {
       ? 'bg-orange-100 text-orange-700'
       : source === 'bilibili'
       ? 'bg-pink-100 text-pink-700'
+      : source === 'bahamut'
+      ? 'bg-violet-100 text-violet-700'
       : 'bg-emerald-100 text-emerald-700'
 
   const label =
-    source === 'reddit' ? 'Reddit' : source === 'bilibili' ? 'Bilibili' : '인벤'
+    source === 'reddit' ? 'Reddit' : source === 'bilibili' ? 'Bilibili' : source === 'bahamut' ? 'Bahamut' : '인벤'
 
   return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${styles}`}>{label}</span>
 }

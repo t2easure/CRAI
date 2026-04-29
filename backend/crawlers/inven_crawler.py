@@ -63,7 +63,8 @@ def _parse_list_date(date_str: str, now_kst: datetime) -> str:
         return candidate.strftime("%Y-%m-%d %H:%M")
     elif len(date_str) == 5:
         candidate = datetime.strptime(f"{today.year}-{date_str}", "%Y-%m-%d").date()
-        year = today.year if candidate <= today else today.year - 1
+        # 미래 날짜(내일 이후)인 경우만 작년으로 처리, 오늘/과거는 올해로
+        year = today.year if candidate <= today + timedelta(days=1) else today.year - 1
         return f"{year}-{date_str}"
     return date_str
 
@@ -153,7 +154,7 @@ async def crawl_board(crawler, board: dict, since: datetime) -> list:
 async def crawl():
     from db.database import save_posts
     all_items = []
-    since = datetime.now(timezone.utc) - timedelta(hours=48)
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
 
     from crawl4ai import BrowserConfig
     browser_cfg = BrowserConfig(
