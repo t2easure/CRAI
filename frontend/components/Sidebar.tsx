@@ -96,19 +96,7 @@ export default function Sidebar({
             <FilterList items={GAMES} activeValue={game} onSelect={onGameChange} />
           </FilterSection>
 
-          {/* 플랫폼 필터: 대시보드 + 데이터 탭 */}
-          {(tab === 'dashboard' || tab === 'data') && (
-            <FilterSection title="플랫폼">
-              <FilterList items={SOURCES} activeValue={source} onSelect={onSourceChange} />
-            </FilterSection>
-          )}
 
-          {/* 카테고리 필터: 리포트 탭 */}
-          {tab === 'reports' && (
-            <FilterSection title="카테고리">
-              <FilterList items={CATEGORIES} activeValue={category} onSelect={onCategoryChange} />
-            </FilterSection>
-          )}
 
           {/* 기간 필터: 데이터 탭 */}
           {tab === 'data' && (

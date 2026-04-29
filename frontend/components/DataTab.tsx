@@ -17,6 +17,7 @@ const SOURCE_COLOR: Record<string, string> = {
   inven: '#6366f1',
   reddit: '#f97316',
   bilibili: '#06b6d4',
+  bahamut: '#8b5cf6',
 }
 
 const RADAR_DUMMY = [
@@ -58,6 +59,7 @@ export default function DataTab({
       inven: sources['inven'] ?? 0,
       reddit: sources['reddit'] ?? 0,
       bilibili: sources['bilibili'] ?? 0,
+      bahamut: sources['bahamut'] ?? 0,
     }))
 
   const gameData = Object.entries(byGame)
@@ -87,6 +89,7 @@ export default function DataTab({
               <Area type="monotone" dataKey="inven" name="인벤" stackId="1" stroke={SOURCE_COLOR.inven} fill={SOURCE_COLOR.inven} fillOpacity={0.15} />
               <Area type="monotone" dataKey="reddit" name="Reddit" stackId="1" stroke={SOURCE_COLOR.reddit} fill={SOURCE_COLOR.reddit} fillOpacity={0.15} />
               <Area type="monotone" dataKey="bilibili" name="Bilibili" stackId="1" stroke={SOURCE_COLOR.bilibili} fill={SOURCE_COLOR.bilibili} fillOpacity={0.15} />
+              <Area type="monotone" dataKey="bahamut" name="Bahamut" stackId="1" stroke={SOURCE_COLOR.bahamut} fill={SOURCE_COLOR.bahamut} fillOpacity={0.15} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -111,25 +114,6 @@ export default function DataTab({
         </div>
       </div>
 
-      {/* 블록 2: 게임별 이슈 집중도 */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-1 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">게임별 이슈 집중도</h3>
-            <p className="text-xs text-slate-400 mt-0.5">수집 게시글 기준</p>
-          </div>
-          <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">실제 연동</span>
-        </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={gameData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis type="number" tick={{ fontSize: 11 }} />
-            <YAxis type="category" dataKey="game" tick={{ fontSize: 11 }} width={80} />
-            <Tooltip />
-            <Bar dataKey="cnt" name="게시글 수" fill="#6366f1" radius={[0, 6, 6, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   )
 }
